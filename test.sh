@@ -79,6 +79,9 @@ while true; do
     echo "Warning: Could not retrieve memory usage for '$CONTAINER_NAME'. It may have stopped."
   fi
 
+  # mem usoge of mosquitto itself
+  docker exec -t mosquitto-bridge cat /proc/1/status | grep VmSize
+
   # 2. Generate distinct payloads for each message.
   payload_for_qos0="${ts} q0 $(generate_payload)"
   payload_for_qos2="${ts} q2 $(generate_payload)"
