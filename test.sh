@@ -67,13 +67,21 @@ echo ""
 trap 'echo ""; echo "Exiting script due to user request."; exit 0' INT TERM
 
 # --- Main Loop ---
+iteration_counter=0
+is_remote_connected=true # Assume remote is initially connected
+NETWORK_NAME="mosquitto-bridge_mqtt-network" # Network to disconnect/connect from/to
+REMOTE_CONTAINER_NAME="mosquitto-remote"     # The container to affect
+
+echo "Will attempt to disconnect/reconnect '$REMOTE_CONTAINER_NAME' from/to '$NETWORK_NAME' every 500 iterations."
+
 while true; do
+  ((iteration_counter++))
   ts=$(date '+%Y-%m-%d %H:%M:%S')
   # 1. Print Docker container memory usage.
   # `docker stats --no-stream` provides a single snapshot of resource usage.
   mem_usage=$(docker stats --no-stream --format "{{.Name}}: {{.MemUsage}}" "$CONTAINER_NAME")
   if [ -n "$mem_usage" ]; then
-    echo "Iteration: ${ts} Memory Usage: $mem_usage"
+    echo "Iteration: ${iteration_counter} @ ${ts} Memory Usage: $mem_usage"
   else
     # This might happen if the container stops during script execution.
     echo "Warning: Could not retrieve memory usage for '$CONTAINER_NAME'. It may have stopped."
@@ -82,9 +90,32 @@ while true; do
   # mem usoge of mosquitto itself
   docker exec -t mosquitto-bridge cat /proc/1/status | grep VmSize
 
+  # Check if it's time to toggle network state
+  if (( iteration_counter % 500 == 0 )); then
+    if [ "$is_remote_connected" = true ]; then
+      echo "Iteration ${iteration_counter}: Disconnecting '$REMOTE_CONTAINER_NAME' from '$NETWORK_NAME'..."
+      docker network disconnect "$NETWORK_NAME" "$REMOTE_CONTAINER_NAME"
+      if [ $? -eq 0 ]; then
+        is_remote_connected=false
+        echo "'$REMOTE_CONTAINER_NAME' disconnected."
+      else
+        echo "ERROR: Failed to disconnect '$REMOTE_CONTAINER_NAME' from '$NETWORK_NAME'."
+      fi
+    else
+      echo "Iteration ${iteration_counter}: Connecting '$REMOTE_CONTAINER_NAME' to '$NETWORK_NAME'..."
+      docker network connect "$NETWORK_NAME" "$REMOTE_CONTAINER_NAME"
+      if [ $? -eq 0 ]; then
+        is_remote_connected=true
+        echo "'$REMOTE_CONTAINER_NAME' connected."
+      else
+        echo "ERROR: Failed to connect '$REMOTE_CONTAINER_NAME' to '$NETWORK_NAME'."
+      fi
+    fi
+  fi
+
   # 2. Generate distinct payloads for each message.
-  payload_for_qos0="${ts} q0 $(generate_payload)"
-  payload_for_qos2="${ts} q2 $(generate_payload)"
+  payload_for_qos0="${ts} iter ${iteration_counter} q0 $(generate_payload)"
+  payload_for_qos2="${ts} iter ${iteration_counter} q2 $(generate_payload)"
 
   # 3. Publish Mosquitto message with QoS 0.
   # QoS 0 (At Most Once): Messages are sent without acknowledgment. They might be lost
