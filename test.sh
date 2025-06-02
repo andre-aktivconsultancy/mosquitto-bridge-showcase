@@ -91,7 +91,7 @@ while true; do
   # if network issues occur or the broker is temporarily unavailable.
   docker exec -it mosquitto-bridge mosquitto_pub -h "$BROKER_HOST" -t "$TOPIC" -m "$payload_for_qos0" -q 0
   if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to publish QoS 0 message to $BROKER_HOST on topic $TOPIC"
+    echo "ERROR: Failed to publish QoS 0 message to $BROKER_HOST on topic ${TOPIC}."
   fi
 
   # 4. Publish Mosquitto message with QoS 2.
@@ -99,7 +99,7 @@ while true; do
   # involving a four-part handshake. This is the most reliable but also highest overhead QoS.
   docker exec -it mosquitto-bridge mosquitto_pub -h "$BROKER_HOST" -t "$TOPIC" -m "$payload_for_qos2" -q 2
   if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to publish QoS 2 message to $BROKER_HOST on topic $TOPIC_QOS2."
+    echo "ERROR: Failed to publish QoS 2 message to $BROKER_HOST on topic ${TOPIC}."
   fi
   sleep "$SLEEP_INTERVAL"
 done
