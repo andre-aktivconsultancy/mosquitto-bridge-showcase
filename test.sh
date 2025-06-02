@@ -11,7 +11,7 @@ DEFAULT_BROKER_HOST="localhost"           # Default MQTT broker host
 DEFAULT_TOPIC_PREFIX="system_monitor/data" # Base topic for messages
 PAYLOAD_RAW_BYTES=750 # Number of raw bytes to generate before base64 encoding.
                       # (750 / 3) * 4 = 1000 base64 characters, which is approx 1KB.
-SLEEP_INTERVAL=5      # Seconds to wait between iterations
+SLEEP_INTERVAL=1      # Seconds to wait between iterations
 
 # --- Functions ---
 usage() {
@@ -52,7 +52,7 @@ if ! docker ps -q --filter "name=^/${CONTAINER_NAME}$" | grep -q .; then
     exit 1
 fi
 
-TOPIC="test/outbound-orig-qos"
+TOPIC="test/outbound"
 
 echo "Starting monitoring and publishing loop..."
 echo "Target container: $CONTAINER_NAME"
@@ -68,19 +68,20 @@ trap 'echo ""; echo "Exiting script due to user request."; exit 0' INT TERM
 
 # --- Main Loop ---
 while true; do
+  ts=$(date '+%Y-%m-%d %H:%M:%S')
   # 1. Print Docker container memory usage.
   # `docker stats --no-stream` provides a single snapshot of resource usage.
   mem_usage=$(docker stats --no-stream --format "{{.Name}}: {{.MemUsage}}" "$CONTAINER_NAME")
   if [ -n "$mem_usage" ]; then
-    echo "Iteration: $(date '+%Y-%m-%d %H:%M:%S') Memory Usage: $mem_usage"
+    echo "Iteration: ${ts} Memory Usage: $mem_usage"
   else
     # This might happen if the container stops during script execution.
     echo "Warning: Could not retrieve memory usage for '$CONTAINER_NAME'. It may have stopped."
   fi
 
   # 2. Generate distinct payloads for each message.
-  payload_for_qos0=$(generate_payload)
-  payload_for_qos2=$(generate_payload)
+  payload_for_qos0="${ts} q0 $(generate_payload)"
+  payload_for_qos2="${ts} q2 $(generate_payload)"
 
   # 3. Publish Mosquitto message with QoS 0.
   # QoS 0 (At Most Once): Messages are sent without acknowledgment. They might be lost
